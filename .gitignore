@@ -4,4 +4,4 @@
 # Local deployment notes and real routing config (mount it in Coolify at /config/config.json)
 PLAN.md
 config.local.json
-DEPLOY.local.md
+*.local.md
