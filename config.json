@@ -1,0 +1,29 @@
+{
+  "coolify": {
+    "base_url_env": "COOLIFY_API_URL",
+    "token_env": "COOLIFY_API_TOKEN"
+  },
+  "github": {
+    "enabled": false
+  },
+  "routes": [
+    {
+      "name": "shop-dev-deploys",
+      "match": {
+        "events": ["deployment_success", "deployment_failed"],
+        "projects": ["shop"],
+        "environments": ["dev"],
+        "applications": ["shop-api", "shop-web"]
+      },
+      "googlechat": {
+        "webhook_env": "GCHAT_DEPLOYMENTS",
+        "thread": "per_app"
+      },
+      "github": {
+        "enabled": false,
+        "environment": "dev",
+        "production": false
+      }
+    }
+  ]
+}
