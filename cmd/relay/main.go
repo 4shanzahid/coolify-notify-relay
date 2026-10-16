@@ -106,6 +106,17 @@ func run(log *slog.Logger) error {
 	go func() { errc <- httpSrv.ListenAndServe() }()
 	log.Info("relay started", "addr", httpSrv.Addr, "routes", len(cfg.Routes),
 		"coolify_api", cc != nil, "github", opts.GitHub != nil)
+	// One line per route (no secrets) so the logs show which config is live.
+	for i := range cfg.Routes {
+		r := &cfg.Routes[i]
+		attrs := []any{"name", r.Name, "events", r.Match.Events, "projects", r.Match.Projects,
+			"environments", r.Match.Environments, "applications", r.Match.Applications,
+			"previews", r.Match.IncludePreviews, "github", r.GitHubActive(cfg.GitHub)}
+		if r.GoogleChat != nil {
+			attrs = append(attrs, "googlechat_env", r.GoogleChat.WebhookEnv, "thread", r.GoogleChat.Thread)
+		}
+		log.Info("route loaded", attrs...)
+	}
 
 	select {
 	case err := <-errc:
