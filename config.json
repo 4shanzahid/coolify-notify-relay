@@ -17,7 +17,7 @@
       },
       "googlechat": {
         "webhook_env": "GCHAT_DEPLOYMENTS",
-        "thread": "per_app"
+        "thread": "none"
       },
       "github": {
         "enabled": false,

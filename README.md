@@ -17,7 +17,7 @@ Coolify ──webhook──▶ relay ──▶ filter by event / project / envir
 - **Routing:** match events by event name, project, environment and app name (globs allowed). Send
   each route to its own Chat space.
 - **Chat cards:** ✅ or ❌ status, commit SHA and message, branch, and buttons to open the app and the
-  Coolify deployment logs. Each app's deploys are threaded together.
+  Coolify deployment logs. Each deploy can be its own message, or deploys can be grouped into threads.
 - **Reliable delivery:**
   - Replies to Coolify immediately.
   - Retries with exponential backoff, honouring `Retry-After`.
@@ -63,7 +63,7 @@ change it with `CONFIG_PATH`. Secrets are passed as environment variables, which
         "environments": ["dev"],
         "applications": ["shop-*"]
       },
-      "googlechat": { "webhook_env": "GCHAT_DEPLOYMENTS", "thread": "per_app" }
+      "googlechat": { "webhook_env": "GCHAT_DEPLOYMENTS", "thread": "none" }
     }
   ]
 }
@@ -71,9 +71,54 @@ change it with `CONFIG_PATH`. Secrets are passed as environment variables, which
 
 - A `match` field you leave out matches anything. All fields must match. One event can match
   several routes.
-- `thread` can be `per_app` (the default), `per_day` or `none`.
 - Coolify's **test notification** goes to every configured Chat webhook.
 - The relay won't start if the config is invalid: unknown fields, missing env vars or bad globs.
+
+### Config reference
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `coolify.base_url_env` | string | unset | Env var holding the Coolify API URL, e.g. `http://coolify:8080`. See [Commit details](#commit-details). |
+| `coolify.token_env` | string | unset | Env var holding a read-only Coolify API token. |
+| `github.enabled` | bool | `false` | Global switch for the GitHub Deployments sink. |
+| `routes[].name` | string | required | A unique name, shown in logs. |
+| `routes[].match.events` | string[] | any | Event names, e.g. `deployment_success`, `deployment_failed`, `backup_failed`, `server_unreachable`. |
+| `routes[].match.projects` | string[] | any | Coolify project names (case-insensitive). |
+| `routes[].match.environments` | string[] | any | Coolify environment names (case-insensitive). |
+| `routes[].match.applications` | string[] | any | Globs matched against the app name, either without Coolify's `:<branch>-<uuid>` suffix or the full name. |
+| `routes[].match.include_previews` | bool | `false` | Also match PR preview deployments. |
+| `routes[].googlechat.webhook_env` | string | required | Env var holding the Chat space's incoming webhook URL. |
+| `routes[].googlechat.thread` | string | `per_app` | How messages are threaded. See [Threads](#threads). |
+| `routes[].github.enabled` | bool | `false` | Post this route's deploys to GitHub. Also needs `github.enabled`. |
+| `routes[].github.environment` | string | Coolify env | GitHub environment name. |
+| `routes[].github.production` | bool | `false` | Mark the GitHub environment as production. |
+
+### Threads
+
+`googlechat.thread` decides where each card lands in the Chat space:
+
+| Value | Behaviour | Good for |
+|---|---|---|
+| `none` | Every deploy is its own message in the main timeline. | Seeing the latest deploys at a glance, with a notification for each one. |
+| `per_app` | Each app gets one thread, keyed by project, environment and app UUID. Later deploys are replies under its first card. | Busy spaces with many apps, where you want the history per app. |
+| `per_day` | One thread per project, environment and day, so all of a day's deploys go under that day's first card. | A daily digest. |
+
+The default is `per_app` when `thread` is left out. Threads use Chat's `threadKey` with
+`REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD`, so a thread is started automatically when none exists.
+Changing the mode only affects new messages.
+
+### Commit details
+
+Coolify's webhook payload has no commit information. If you set `coolify.base_url_env` and
+`coolify.token_env`, the relay looks up the deployment through the Coolify API. The card then shows
+the **commit** (short SHA linked to GitHub, plus the first line of the commit message) and the
+**branch**.
+
+1. In Coolify, create a token under **Keys & Tokens → API Tokens** with **only the `read` permission**.
+2. Set `COOLIFY_API_URL` (`http://coolify:8080` from inside the Coolify Docker network) and
+   `COOLIFY_API_TOKEN` on the relay.
+
+If the lookup fails, the card is still sent, just without these lines, and the relay logs a warning.
 
 | Env var | Description |
 |---|---|
