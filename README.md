@@ -141,6 +141,12 @@ Deploy it as a **Dockerfile** application on the same server as Coolify:
    so it uses its own Dockerfile `HEALTHCHECK` instead.
 4. **Your routes:** mount your own `config.json` at `/config/config.json` as a Coolify file mount,
    or fork the repo and edit it there.
+   - **Changing a mounted config later:** as of Coolify v4.4.6, updating the mount through the
+     API/CLI (`coolify app storage update`) only changes Coolify's database. It doesn't rewrite the
+     file on the server, and redeploys only write missing files. Delete and recreate the mount (or
+     click Save on it in the UI), then redeploy.
+   - **Checking what's live:** the startup log has one `route loaded` line per route, showing its
+     filters and thread mode.
 
 ## GitHub Deployments
 
