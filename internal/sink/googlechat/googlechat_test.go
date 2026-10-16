@@ -42,8 +42,8 @@ func TestBuildDeploymentSuccess(t *testing.T) {
 	}
 	m := Build(event(t, "deployment_success.json"), d, fixedNow)
 
-	if m.Text != "✅ shop-api deployed (dev) @ 3f2a9c1" {
-		t.Errorf("text = %q", m.Text)
+	if m.FallbackText != "✅ shop-api deployed (dev) @ 3f2a9c1" {
+		t.Errorf("text = %q", m.FallbackText)
 	}
 	card := m.CardsV2[0].Card
 	if card.Header.Title != "✅ shop-api" || card.Header.Subtitle != "shop · dev" {
@@ -51,6 +51,9 @@ func TestBuildDeploymentSuccess(t *testing.T) {
 	}
 	b, _ := json.Marshal(m)
 	s := string(b)
+	if strings.Contains(s, `"text":"✅`) || m.Text != "" {
+		t.Error("summary must go in fallbackText, not text (text renders above the card)")
+	}
 	for _, want := range []string{
 		`https://github.com/acme/shop-api/commit/3f2a9c1e7b4d8a6f0c5e2b9d1a7f4c8e6b3d0a5f`,
 		`Merge pull request #30 from acme/feature-checkout`,
@@ -69,8 +72,8 @@ func TestBuildDeploymentSuccess(t *testing.T) {
 
 func TestBuildDeploymentFailedWithoutDetails(t *testing.T) {
 	m := Build(event(t, "deployment_failed.json"), nil, fixedNow)
-	if m.Text != "❌ shop-web deployment failed (dev)" {
-		t.Errorf("text = %q", m.Text)
+	if m.FallbackText != "❌ shop-web deployment failed (dev)" {
+		t.Errorf("text = %q", m.FallbackText)
 	}
 	b, _ := json.Marshal(m)
 	if !strings.Contains(string(b), "Failed") || strings.Contains(string(b), "Commit") {
@@ -88,14 +91,14 @@ func TestBuildEscapesHTML(t *testing.T) {
 
 func TestBuildGeneric(t *testing.T) {
 	m := Build(event(t, "server_unreachable.json"), nil, fixedNow)
-	if m.Text != "⚠️ Server unreachable" {
-		t.Errorf("text = %q", m.Text)
+	if m.FallbackText != "⚠️ Server unreachable" {
+		t.Errorf("text = %q", m.FallbackText)
 	}
 	b, _ := json.Marshal(m)
 	if !strings.Contains(string(b), `"text":"localhost"`) || !strings.Contains(string(b), "Open in Coolify") {
 		t.Errorf("card: %s", b)
 	}
-	if got := Build(event(t, "test.json"), nil, fixedNow).Text; !strings.HasPrefix(got, "🔔 ") {
+	if got := Build(event(t, "test.json"), nil, fixedNow).FallbackText; !strings.HasPrefix(got, "🔔 ") {
 		t.Errorf("test text = %q", got)
 	}
 }
@@ -155,8 +158,8 @@ func TestSendPostsToWebhookWithThreadAndEnrichment(t *testing.T) {
 	if got.Thread == nil || got.Thread.ThreadKey != "shop/dev/a1b2c3d4e5f6a7b8c9d0e1f2" {
 		t.Errorf("thread = %+v", got.Thread)
 	}
-	if !strings.HasSuffix(got.Text, "@ 3f2a9c1") {
-		t.Errorf("text = %q", got.Text)
+	if !strings.HasSuffix(got.FallbackText, "@ 3f2a9c1") {
+		t.Errorf("text = %q", got.FallbackText)
 	}
 }
 

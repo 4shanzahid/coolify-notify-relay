@@ -12,9 +12,12 @@ import (
 
 // Message is the subset of the Google Chat v1 Message resource that webhooks accept.
 type Message struct {
-	Text    string     `json:"text,omitempty"`
-	CardsV2 []CardWrap `json:"cardsV2,omitempty"`
-	Thread  *Thread    `json:"thread,omitempty"`
+	Text string `json:"text,omitempty"`
+	// FallbackText is shown where cards can't render (e.g. mobile push
+	// notifications) without duplicating the card in the space.
+	FallbackText string     `json:"fallbackText,omitempty"`
+	CardsV2      []CardWrap `json:"cardsV2,omitempty"`
+	Thread       *Thread    `json:"thread,omitempty"`
 }
 
 type Thread struct {
@@ -83,8 +86,8 @@ type Details struct {
 
 const maxFieldLen = 600
 
-// Build renders an event as a Chat message: a one-line text (what shows in
-// notifications) plus a card with the details and links.
+// Build renders an event as a Chat message: a card with the details and links,
+// plus a one-line fallbackText used for notifications.
 func Build(e *coolify.Event, d *Details, now time.Time) Message {
 	if e.IsDeployment() {
 		return buildDeployment(e, d, now)
@@ -142,7 +145,7 @@ func buildDeployment(e *coolify.Event, d *Details, now time.Time) Message {
 	}
 
 	return Message{
-		Text: summary,
+		FallbackText: summary,
 		CardsV2: []CardWrap{{
 			CardID: "deployment",
 			Card: Card{
@@ -203,7 +206,7 @@ func buildGeneric(e *coolify.Event, now time.Time) Message {
 	}
 
 	return Message{
-		Text: fmt.Sprintf("%s %s", icon, msg),
+		FallbackText: fmt.Sprintf("%s %s", icon, msg),
 		CardsV2: []CardWrap{{
 			CardID: "event",
 			Card: Card{
