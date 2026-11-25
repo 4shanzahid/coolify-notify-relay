@@ -53,6 +53,8 @@ func TestParseErrors(t *testing.T) {
 		"bad chat url":         `{"routes":[{"name":"a","googlechat":{"webhook_env":"BAD"}}]}`,
 		"trailing data":        `{"routes":[{"name":"a","googlechat":{"webhook_env":"G"}}]} {}`,
 		"github needs coolify": `{"github":{"enabled":true},"routes":[{"name":"a","github":{"enabled":true}}]}`,
+		"image repo bad glob":  `{"coolify":{"image_repos":{"[":"acme/x"}},"routes":[{"name":"a","googlechat":{"webhook_env":"G"}}]}`,
+		"image repo not slug":  `{"coolify":{"image_repos":{"x":"acme"}},"routes":[{"name":"a","googlechat":{"webhook_env":"G"}}]}`,
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {

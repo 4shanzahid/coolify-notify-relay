@@ -25,6 +25,10 @@ type Config struct {
 type Coolify struct {
 	BaseURLEnv string `json:"base_url_env"`
 	TokenEnv   string `json:"token_env"`
+	// ImageRepos maps app names (path.Match globs on the short name) to the GitHub
+	// "owner/repo" that Docker Image apps are built from. Coolify only knows a
+	// placeholder repo for those apps, so without an entry their commit is shown unlinked.
+	ImageRepos map[string]string `json:"image_repos,omitempty"`
 
 	BaseURL string `json:"-"`
 	Token   string `json:"-"`
@@ -120,6 +124,15 @@ func (c *Config) resolve(getenv func(string) string) ([]string, error) {
 			warnings = append(warnings, fmt.Sprintf("coolify: %s/%s not set; commit details and the GitHub sink are unavailable",
 				c.Coolify.BaseURLEnv, c.Coolify.TokenEnv))
 			c.Coolify.BaseURL, c.Coolify.Token = "", ""
+		}
+	}
+
+	for glob, repo := range c.Coolify.ImageRepos {
+		if _, err := path.Match(glob, ""); err != nil {
+			errs = append(errs, fmt.Errorf("coolify.image_repos: bad application glob %q: %w", glob, err))
+		}
+		if parts := strings.Split(repo, "/"); len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			errs = append(errs, fmt.Errorf("coolify.image_repos[%q]: %q is not owner/repo", glob, repo))
 		}
 	}
 

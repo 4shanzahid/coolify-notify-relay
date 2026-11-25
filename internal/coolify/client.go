@@ -25,7 +25,13 @@ type Application struct {
 	GitRepository string `json:"git_repository"`
 	GitBranch     string `json:"git_branch"`
 	FQDN          string `json:"fqdn"`
+	BuildPack     string `json:"build_pack"`
+	// For build_pack "dockerimage": the tag being deployed (a commit SHA when the CD tags images that way).
+	DockerImageTag string `json:"docker_registry_image_tag"`
 }
+
+// BuildPackDockerImage is Coolify's build pack for apps deployed from a pre-built image.
+const BuildPackDockerImage = "dockerimage"
 
 // Client is a read-only Coolify API client. Responses are cached because the
 // Google Chat and GitHub sinks both look up the same deployment.
@@ -63,6 +69,17 @@ func (c *Client) GetApplication(ctx context.Context, uuid string) (*Application,
 	if a, ok := c.apps.Get(uuid); ok {
 		return a, nil
 	}
+	var a Application
+	if err := c.get(ctx, "/api/v1/applications/"+url.PathEscape(uuid), &a); err != nil {
+		return nil, err
+	}
+	c.apps.Set(uuid, &a)
+	return &a, nil
+}
+
+// GetApplicationFresh skips the cache (and refreshes it). Use it for values that change
+// on every deploy, such as a Docker Image app's tag.
+func (c *Client) GetApplicationFresh(ctx context.Context, uuid string) (*Application, error) {
 	var a Application
 	if err := c.get(ctx, "/api/v1/applications/"+url.PathEscape(uuid), &a); err != nil {
 		return nil, err

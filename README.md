@@ -80,6 +80,7 @@ change it with `CONFIG_PATH`. Secrets are passed as environment variables, which
 |---|---|---|---|
 | `coolify.base_url_env` | string | unset | Env var holding the Coolify API URL, e.g. `http://coolify:8080`. See [Commit details](#commit-details). |
 | `coolify.token_env` | string | unset | Env var holding a read-only Coolify API token. |
+| `coolify.image_repos` | object | unset | For **Docker Image** apps: maps app-name globs to the GitHub `owner/repo` the image is built from, e.g. `{"shop-web": "acme/shop-web"}`. Coolify records `HEAD` and a placeholder repo for these apps, so the relay uses the app's **image tag** as the commit (when it is a commit SHA) and links it to this repo. Without an entry, the commit is shown unlinked. |
 | `github.enabled` | bool | `false` | Global switch for the GitHub Deployments sink. |
 | `routes[].name` | string | required | A unique name, shown in logs. |
 | `routes[].match.events` | string[] | any | Event names, e.g. `deployment_success`, `deployment_failed`, `backup_failed`, `server_unreachable`. |
@@ -119,6 +120,8 @@ the **commit** (short SHA linked to GitHub, plus the first line of the commit me
    `COOLIFY_API_TOKEN` on the relay.
 
 If the lookup fails, the card is still sent, just without these lines, and the relay logs a warning.
+
+For **Docker Image** apps Coolify has no commit, so the relay reads the app's image tag instead (fresh, not cached, since it changes on every deploy). This works when your CD tags images with the commit SHA. Map the app to its repo with `coolify.image_repos` to link the commit.
 
 | Env var | Description |
 |---|---|

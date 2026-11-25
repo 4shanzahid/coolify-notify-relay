@@ -203,3 +203,83 @@ func TestLimiterSpacesCalls(t *testing.T) {
 		t.Errorf("3 calls took %v, want ≥100ms", el)
 	}
 }
+
+func TestSendDockerImageAppUsesImageTagAsCommit(t *testing.T) {
+	const sha = "8871939c97a1b53cc59cbdb9eeb1ce59b76857b1"
+	appReads := 0
+	coolifyAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/deployments/d1e2p3l4o5y6u7u8i9d0x1y2":
+			// Coolify records HEAD (and no message) for Docker Image apps.
+			io.WriteString(w, `{"commit":"HEAD","commit_message":null}`)
+		case "/api/v1/applications/a1b2c3d4e5f6a7b8c9d0e1f2":
+			appReads++
+			io.WriteString(w, `{"git_repository":"coollabsio/coolify","git_branch":"dev","build_pack":"dockerimage","docker_registry_image_tag":"`+sha+`"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer coolifyAPI.Close()
+
+	var got Message
+	chat := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Error(err)
+		}
+		io.WriteString(w, `{}`)
+	}))
+	defer chat.Close()
+
+	s := New(coolify.NewClient(coolifyAPI.URL, "ctok"), slog.New(slog.NewTextHandler(io.Discard, nil))).
+		WithImageRepos(map[string]string{"shop-*": "acme/shop-api"})
+	s.now = func() time.Time { return fixedNow }
+	route := &config.Route{Name: "r", GoogleChat: &config.GoogleChatTarget{
+		WebhookURL: chat.URL + "/v1/spaces/S/messages?key=k&token=t", Thread: config.ThreadNone,
+	}}
+	if err := s.Send(context.Background(), &sink.Job{Event: event(t, "deployment_success.json"), Route: route}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(got.FallbackText, "@ 8871939") {
+		t.Errorf("text = %q", got.FallbackText)
+	}
+	card, _ := json.Marshal(got.CardsV2)
+	if !strings.Contains(string(card), `https://github.com/acme/shop-api/commit/`+sha) {
+		t.Errorf("commit not linked to the mapped repo: %s", card)
+	}
+	if strings.Contains(string(card), "coollabsio") {
+		t.Errorf("placeholder repo leaked into the card: %s", card)
+	}
+	if appReads < 2 {
+		t.Errorf("image tag must be read uncached; application reads = %d", appReads)
+	}
+}
+
+func TestSendDockerImageAppWithoutRepoMappingShowsUnlinkedCommit(t *testing.T) {
+	coolifyAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/deployments/d1e2p3l4o5y6u7u8i9d0x1y2":
+			io.WriteString(w, `{"commit":"HEAD"}`)
+		case "/api/v1/applications/a1b2c3d4e5f6a7b8c9d0e1f2":
+			io.WriteString(w, `{"git_repository":"coollabsio/coolify","git_branch":"dev","build_pack":"dockerimage","docker_registry_image_tag":"8871939c97a1b53cc59cbdb9eeb1ce59b76857b1"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer coolifyAPI.Close()
+	var got Message
+	chat := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&got)
+		io.WriteString(w, `{}`)
+	}))
+	defer chat.Close()
+
+	s := New(coolify.NewClient(coolifyAPI.URL, "ctok"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	route := &config.Route{Name: "r", GoogleChat: &config.GoogleChatTarget{WebhookURL: chat.URL + "/v1/spaces/S/messages?key=k&token=t", Thread: config.ThreadNone}}
+	if err := s.Send(context.Background(), &sink.Job{Event: event(t, "deployment_success.json"), Route: route}); err != nil {
+		t.Fatal(err)
+	}
+	card, _ := json.Marshal(got.CardsV2)
+	if !strings.Contains(string(card), "8871939") || strings.Contains(string(card), "github.com/coollabsio") {
+		t.Errorf("want an unlinked 8871939 commit, got %s", card)
+	}
+}
