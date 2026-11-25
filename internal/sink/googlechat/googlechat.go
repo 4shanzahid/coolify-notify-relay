@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/4shanzahid/coolify-notify-relay/internal/coolify"
 	"github.com/4shanzahid/coolify-notify-relay/internal/httpx"
 	"github.com/4shanzahid/coolify-notify-relay/internal/sink"
+	"github.com/4shanzahid/coolify-notify-relay/internal/text"
 )
 
 // spaceInterval is Google Chat's quota: 1 message per second per space, shared
@@ -25,8 +27,10 @@ const spaceInterval = 1100 * time.Millisecond
 type Sink struct {
 	http    *http.Client
 	coolify *coolify.Client // optional enrichment
-	log     *slog.Logger
-	now     func() time.Time
+	// imageRepos maps app-name globs to the GitHub repo of Docker Image apps (config coolify.image_repos).
+	imageRepos map[string]string
+	log        *slog.Logger
+	now        func() time.Time
 
 	mu       sync.Mutex
 	limiters map[string]*limiter
@@ -43,6 +47,12 @@ func New(cc *coolify.Client, log *slog.Logger) *Sink {
 		limiters: map[string]*limiter{},
 		interval: spaceInterval,
 	}
+}
+
+// WithImageRepos sets the app-name-glob → "owner/repo" map used to link Docker Image apps' commits.
+func (s *Sink) WithImageRepos(m map[string]string) *Sink {
+	s.imageRepos = m
+	return s
 }
 
 func (s *Sink) Name() string { return "googlechat" }
@@ -98,12 +108,40 @@ func (s *Sink) details(ctx context.Context, e *coolify.Event) *Details {
 			s.log.Warn("coolify application lookup failed", "application_uuid", e.ApplicationUUID, "err", err)
 		} else {
 			d.Repo, d.Branch = coolify.RepoSlug(app.GitRepository), app.GitBranch
+			if app.BuildPack == coolify.BuildPackDockerImage {
+				s.imageDetails(ctx, e, d)
+			}
 		}
 	}
 	if d.Commit == "HEAD" {
 		d.Commit = ""
 	}
 	return d
+}
+
+// imageDetails fills the commit of a Docker Image app. Coolify records "HEAD" as the
+// commit and a placeholder git repository for those apps; the image tag is the commit
+// when the CD tags images with the commit SHA. The app is re-read uncached because the
+// tag changes on every deploy.
+func (s *Sink) imageDetails(ctx context.Context, e *coolify.Event, d *Details) {
+	d.Repo = s.imageRepo(e.ShortAppName())
+	app, err := s.coolify.GetApplicationFresh(ctx, e.ApplicationUUID)
+	if err != nil {
+		s.log.Warn("coolify application lookup failed", "application_uuid", e.ApplicationUUID, "err", err)
+		return
+	}
+	if (d.Commit == "" || d.Commit == "HEAD") && text.IsSHA(app.DockerImageTag) {
+		d.Commit, d.CommitMessage = app.DockerImageTag, ""
+	}
+}
+
+func (s *Sink) imageRepo(app string) string {
+	for glob, repo := range s.imageRepos {
+		if ok, _ := path.Match(glob, app); ok {
+			return repo
+		}
+	}
+	return ""
 }
 
 func threadKey(mode string, e *coolify.Event, now time.Time) string {

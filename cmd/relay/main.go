@@ -77,7 +77,7 @@ func run(log *slog.Logger) error {
 		Config:     cfg,
 		Router:     router.New(cfg.Routes),
 		Queue:      q,
-		GoogleChat: googlechat.New(cc, log),
+		GoogleChat: googlechat.New(cc, log).WithImageRepos(cfg.Coolify.ImageRepos),
 		Metrics:    reg,
 		Log:        log,
 	}
